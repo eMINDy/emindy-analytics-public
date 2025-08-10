@@ -1,0 +1,44 @@
+name: Sync Published CSVs
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # هر روز 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download CSVs
+        run: |
+          mkdir -p data/gsc data/ga4 data/youtube data/social
+          curl -L "$GSC_QUERIES_URL" -o data/gsc/queries.csv
+          curl -L "$GSC_PAGES_URL" -o data/gsc/pages.csv
+          curl -L "$YT_CHART_DATA_URL" -o data/youtube/top_videos.csv
+          curl -L "$GA4_PAGES_URL" -o data/ga4/pages.csv
+          if [ -n "$SOCIAL_POSTS_URL" ]; then curl -L "$SOCIAL_POSTS_URL" -o data/social/posts.csv; fi
+
+      - name: Normalize line endings
+        run: |
+          sudo apt-get update && sudo apt-get install -y dos2unix
+          find data -type f -name "*.csv" -print0 | xargs -0 dos2unix
+
+      - name: Commit changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "emindy-bot"
+            git config user.email "actions@github.com"
+            git add -A
+            git commit -m "data: sync $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git push
+          else
+            echo "No changes."
+          fi
+    env:
+      GSC_QUERIES_URL: ${{ vars.GSC_QUERIES_URL }}
+      GSC_PAGES_URL: ${{ vars.GSC_PAGES_URL }}
+      YT_CHART_DATA_URL: ${{ vars.YT_CHART_DATA_URL }}
+      GA4_PAGES_URL: ${{ vars.GA4_PAGES_URL }}
+      SOCIAL_POSTS_URL: ${{ vars.SOCIAL_POSTS_URL }}
